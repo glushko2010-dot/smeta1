@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Смета сантехники</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1565C0">
+<link rel="apple-touch-icon" href="icon-192.png">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+:root{--bg:#f0f2f5;--card:#fff;--tx:#1a1a1a;--mut:#666;--pri:#1565C0;--ok:#2E7D32;--dang:#c62828;--dangbg:#ffebee;--ibg:#f5f5f5;--bd:#ddd;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121417;--card:#1e2227;--tx:#eceff1;--mut:#9aa3ab;--pri:#1976D2;--ok:#66BB6A;--dangbg:#3a1d1f;--ibg:#2a2f35;--bd:#3a4047}}
+:root[data-theme="dark"]{--bg:#121417;--card:#1e2227;--tx:#eceff1;--mut:#9aa3ab;--pri:#1976D2;--ok:#66BB6A;--dangbg:#3a1d1f;--ibg:#2a2f35;--bd:#3a4047}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--tx);padding-bottom:170px;min-height:100vh}
+.header{background:var(--pri);color:#fff;padding:16px;position:sticky;top:env(safe-area-inset-top,0px);z-index:10;display:flex;justify-content:space-between;align-items:center}
+.header h1{font-size:20px;font-weight:600}.count{font-size:13px;opacity:.85;margin-top:2px}
+.clear{background:rgba(255,255,255,.18);color:#fff;border:0;border-radius:8px;padding:8px 12px;font-size:13px}
+.list{padding:12px;max-width:640px;margin:0 auto}
+.item{background:var(--card);border-radius:12px;padding:12px 14px;margin-bottom:10px;display:flex;align-items:center;gap:12px;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.num{width:30px;height:30px;background:var(--pri);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:13px;flex-shrink:0}
+.info{flex:1;min-width:0}.name{font-size:16px;font-weight:500;word-break:break-word}.qty{font-size:13px;color:var(--mut);margin-top:2px}
+.btn-icon{width:36px;height:36px;border:0;border-radius:8px;background:var(--ibg);font-size:16px;margin-left:6px}
+.btn-icon.del{background:var(--dangbg)}
+.empty{text-align:center;padding:60px 20px;color:var(--mut);font-size:15px;line-height:1.5}
+.bottom{position:fixed;bottom:0;left:0;right:0;background:var(--card);padding:12px 12px calc(12px + env(safe-area-inset-bottom,0px));box-shadow:0 -4px 12px rgba(0,0,0,.12);display:flex;flex-direction:column;gap:10px}
+.bottom>*{max-width:640px;width:100%;margin:0 auto}
+.row{display:flex;gap:8px}
+input{flex:1;min-width:0;height:46px;border:1px solid var(--bd);border-radius:10px;padding:0 12px;font-size:16px;background:var(--bg);color:var(--tx)}
+.btn{height:50px;border:0;border-radius:12px;font-size:15px;font-weight:600;flex:1;color:#fff;background:var(--pri)}
+.btn.add{flex:0 0 52px;font-size:22px}
+.btn.pdf{background:transparent;color:var(--ok);border:2px solid var(--ok)}
+.btn.on{background:var(--dang)}
+.modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;align-items:flex-end;justify-content:center}
+.modal.show{display:flex}
+.mc{background:var(--card);width:100%;max-width:500px;border-radius:20px 20px 0 0;padding:22px 18px calc(24px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:10px}
+.mc h3{font-size:18px}.mc .btn{background:var(--pri)}.mc .btn.c{background:var(--ibg);color:var(--tx)}
+.toast{position:fixed;left:50%;bottom:190px;transform:translateX(-50%);background:#222;color:#fff;padding:10px 16px;border-radius:20px;font-size:14px;opacity:0;transition:opacity .25s;pointer-events:none;z-index:200;max-width:90%;text-align:center}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div class="header">
+  <div><h1>Смета сантехники</h1><div class="count" id="count">Позиций: 0</div></div>
+  <button class="clear" id="clear">Очистить</button>
+</div>
+<div class="list" id="list"></div>
+<div class="bottom">
+  <div class="row"><input id="txt" placeholder="Например: труба 20 мм 5 метров" enterkeyhint="done"><button class="btn add" id="add">+</button></div>
+  <div class="row"><button class="btn" id="mic">🎤 Диктовать</button><button class="btn pdf" id="pdf">📄 PDF</button></div>
+</div>
+<div class="modal" id="modal"><div class="mc">
+  <h3>Редактировать</h3>
+  <input id="eName" placeholder="Название"><input id="eQty" placeholder="Количество" inputmode="decimal"><input id="eUnit" placeholder="Единица (шт, м, кг…)">
+  <button class="btn" id="eSave">Сохранить</button><button class="btn c" id="eCancel">Отмена</button>
+</div></div>
+<div class="toast" id="toast"></div>
+<script>
+const $=id=>document.getElementById(id);
+let materials=[],editIndex=-1,rec=null,want=false;
+
+function store(){try{localStorage.setItem('smeta_materials',JSON.stringify(materials))}catch(e){}}
+function load(){try{const s=JSON.parse(localStorage.getItem('smeta_materials')||'[]');if(Array.isArray(s))materials=s.filter(m=>m&&typeof m.name==='string')}catch(e){materials=[]}}
+function toast(t){const e=$('toast');e.textContent=t;e.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove('show'),3000)}
+
+function el(tag,cls,text){const e=document.createElement(tag);if(cls)e.className=cls;if(text!==undefined)e.textContent=text;return e}
+function render(){
+  $('count').textContent='Позиций: '+materials.length;
+  const list=$('list');list.textContent='';
+  if(!materials.length){list.append(el('div','empty','Продиктуй или напиши материал.\nРазмеры (20 мм, 1/2") сохраняются в названии.'));list.firstChild.style.whiteSpace='pre-line';return}
+  materials.forEach((m,i)=>{
+    const it=el('div','item'),inf=el('div','info');
+    inf.append(el('div','name',m.name),el('div','qty',m.quantity+' '+m.unit));
+    const ed=el('button','btn-icon','✏️'),dl=el('button','btn-icon del','🗑️');
+    ed.onclick=()=>openEdit(i);dl.onclick=()=>{if(confirm('Удалить эту позицию?')){materials.splice(i,1);store();render()}};
+    const act=el('div');act.style.display='flex';act.append(ed,dl);
+    it.append(el('div','num',String(i+1)),inf,act);list.append(it);
+  });
+}
+
+const NUM={один:1,одна:1,одну:1,два:2,две:2,три:3,четыре:4,пять:5,шесть:6,семь:7,восемь:8,девять:9,десять:10,пятнадцать:15,двадцать:20,тридцать:30,сорок:40,пятьдесят:50,сто:100};
+const SIZE=/(?:ду|диаметр\w*|ø)\s*\d+(?:\.\d+)?|\d+(?:\.\d+)?\s*(?:мм|миллиметр\w*|дюйм\w*|")|\d+\/\d+(?:\s*(?:дюйм\w*|"))?/gu;
+const QTY=/(\d+(?:\.\d+)?)\s*(штук\w*|шт(?![\p{L}])\.?|метр\w*|м(?![\p{L}])\.?|комплект\w*|компл(?![\p{L}])\.?|упаков\w*|уп(?![\p{L}])\.?|кг(?![\p{L}])|килограмм\w*)/u;
+function normSize(m){return m.replace(/\s*миллиметр\w*/,' мм').replace(/\s*мм/,' мм').replace(/\s*дюйм\w*/,'"').replace(/\s+"/,'"').replace(/^ду\s*/,'Ду ').replace(/^диаметр\w*\s*/,'⌀').trim()}
+function unitOf(u){if(u.startsWith('шт'))return'шт';if(u.startsWith('м'))return'м';if(u.startsWith('ко'))return'компл.';if(u.startsWith('уп'))return'уп.';return'кг'}
+function parse(text){
+  let s=' '+text.toLowerCase().replace(/(\d),(\d)/g,'$1.$2')+' ';
+  s=s.replace(/\p{L}+/gu,w=>NUM[w]!==undefined?String(NUM[w]):w);
+  const keep=[];
+  s=s.replace(SIZE,m=>{keep.push(normSize(m));return ' §'+String.fromCharCode(96+keep.length)+'§ '});
+  let quantity='1',unit='шт';
+  const q=s.match(QTY);
+  if(q){quantity=q[1];unit=unitOf(q[2]);s=s.replace(q[0],' ')}
+  else{const all=[...s.matchAll(/\d+(?:\.\d+)?/g)];if(all.length){const l=all[all.length-1];quantity=l[0];s=s.slice(0,l.index)+' '+s.slice(l.index+l[0].length)}}
+  let name=s.replace(/§([a-z])§/g,(_,c)=>keep[c.charCodeAt(0)-97]).replace(/\s+/g,' ').trim();
+  if(!name)name=text.trim();
+  name=name.charAt(0).toUpperCase()+name.slice(1);
+  materials.push({name,quantity,unit});store();render();
+  window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'});
+}
+
+function addTyped(){const v=$('txt').value.trim();if(!v)return;parse(v);$('txt').value=''}
+$('add').onclick=addTyped;
+$('txt').addEventListener('keydown',e=>{if(e.key==='Enter')addTyped()});
+
+function micUi(on){const b=$('mic');b.classList.toggle('on',on);b.textContent=on?'⏹ Слушаю… (стоп)':'🎤 Диктовать'}
+function toggleListen(){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){toast('Голосовой ввод работает в Chrome. Пока можно печатать.');return}
+  if(want){want=false;rec&&rec.stop();return}
+  rec=new SR();rec.lang='ru-RU';rec.continuous=true;rec.interimResults=false;
+  rec.onstart=()=>micUi(true);
+  rec.onresult=e=>{for(let i=e.resultIndex;i<e.results.length;i++)if(e.results[i].isFinal){const t=e.results[i][0].transcript.trim();if(t)parse(t)}};
+  rec.onerror=e=>{if(e.error==='no-speech'||e.error==='aborted')return;want=false;toast(e.error==='not-allowed'||e.error==='service-not-allowed'?'Нет доступа к микрофону. Открой страницу в Chrome или печатай текстом.':'Ошибка распознавания: '+e.error)};
+  rec.onend=()=>{if(want){setTimeout(()=>{try{rec.start()}catch(e){want=false;micUi(false)}},250)}else micUi(false)};
+  want=true;try{rec.start()}catch(e){want=false;micUi(false)}
+}
+$('mic').onclick=toggleListen;
+
+function openEdit(i){editIndex=i;const m=materials[i];$('eName').value=m.name;$('eQty').value=m.quantity;$('eUnit').value=m.unit;$('modal').classList.add('show')}
+function closeEdit(){$('modal').classList.remove('show');editIndex=-1}
+$('eCancel').onclick=closeEdit;
+$('modal').addEventListener('click',e=>{if(e.target.id==='modal')closeEdit()});
+$('eSave').onclick=()=>{if(editIndex<0)return;const m=materials[editIndex];m.name=$('eName').value.trim()||m.name;m.quantity=$('eQty').value.trim()||'1';m.unit=$('eUnit').value.trim()||'шт';store();render();closeEdit()};
+$('clear').onclick=()=>{if(materials.length&&confirm('Очистить весь список?')){materials=[];store();render()}};
+
+function wrap(g,text,maxW){const out=[];let cur='';for(const w of text.split(' ')){const t=cur?cur+' '+w:w;if(g.measureText(t).width>maxW&&cur){out.push(cur);cur=w}else cur=t}if(cur)out.push(cur);return out}
+function drawPages(){
+  const S=2,W=794,H=1123,M=56,pages=[],F='-apple-system,"Segoe UI",Roboto,Arial,sans-serif';let c,g,y;
+  const np=()=>{c=document.createElement('canvas');c.width=W*S;c.height=H*S;g=c.getContext('2d');g.scale(S,S);g.fillStyle='#fff';g.fillRect(0,0,W,H);pages.push(c);y=M};
+  np();g.fillStyle='#111';g.font='bold 24px '+F;g.fillText('Смета сантехнических материалов',M,y+20);y+=36;
+  g.font='14px '+F;g.fillStyle='#555';g.fillText(new Date().toLocaleString('ru-RU'),M,y+10);y+=34;
+  materials.forEach((m,i)=>{
+    g.font='16px '+F;const lines=wrap(g,m.name,W-2*M-190),h=lines.length*22+14;
+    if(y+h>H-M)np();
+    g.fillStyle='#111';g.font='16px '+F;g.fillText((i+1)+'.',M,y+16);
+    lines.forEach((l,k)=>g.fillText(l,M+36,y+16+k*22));
+    g.textAlign='right';g.fillText(m.quantity+' '+m.unit,W-M,y+16);g.textAlign='left';
+    y+=h;g.strokeStyle='#ddd';g.beginPath();g.moveTo(M,y-6);g.lineTo(W-M,y-6);g.stroke();
+  });
+  return pages;
+}
+async function createPdf(){
+  if(!materials.length){toast('Список пуст');return}
+  if(!window.jspdf){toast('PDF-библиотека не загрузилась');return}
+  const doc=new window.jspdf.jsPDF({unit:'mm',format:'a4'});
+  drawPages().forEach((c,i)=>{if(i)doc.addPage();doc.addImage(c.toDataURL('image/jpeg',.92),'JPEG',0,0,210,297)});
+  const fn='Smeta_'+new Date().toISOString().slice(0,10)+'.pdf';
+  let d=null;try{if(window.claude&&claude.use)d=await claude.use('downloads')}catch(e){}
+  if(d){try{await d.save({filename:fn,data:doc.output('blob')})}catch(e){if(e&&e.code!=='declined')toast('Не удалось сохранить PDF')}}
+  else doc.save(fn);
+}
+$('pdf').onclick=createPdf;
+
+load();render();
+if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+</script>
+</body>
+</html>
