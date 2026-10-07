@@ -98,8 +98,24 @@ function parse(text){
   let name=s.replace(/§([a-z])§/g,(_,c)=>keep[c.charCodeAt(0)-97]).replace(/\s+/g,' ').trim();
   if(!name)name=text.trim();
   name=name.charAt(0).toUpperCase()+name.slice(1);
-  materials.push({name,quantity,unit});store();render();
+  addOrMerge(name,quantity,unit);store();render();
   window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'});
+}
+
+function normKey(name,unit){return name.trim().toLowerCase().replace(/\s+/g,' ')+'|'+unit.trim().toLowerCase()}
+function fmtQty(n){return Number.isInteger(n)?String(n):String(Math.round(n*100)/100)}
+function addOrMerge(name,quantity,unit,skipIndex){
+  const key=normKey(name,unit);
+  const i=materials.findIndex((m,idx)=>idx!==skipIndex&&normKey(m.name,m.unit)===key);
+  const q=parseFloat(String(quantity).replace(',','.'))||0;
+  if(i>-1){
+    const cur=parseFloat(String(materials[i].quantity).replace(',','.'))||0;
+    materials[i].quantity=fmtQty(cur+q);
+    toast('Объединено с позицией '+(i+1)+': теперь '+materials[i].quantity+' '+materials[i].unit);
+    return i;
+  }
+  materials.push({name,quantity:fmtQty(q)||quantity,unit});
+  return materials.length-1;
 }
 
 function addTyped(){const v=$('txt').value.trim();if(!v)return;parse(v);$('txt').value=''}
@@ -124,7 +140,15 @@ function openEdit(i){editIndex=i;const m=materials[i];$('eName').value=m.name;$(
 function closeEdit(){$('modal').classList.remove('show');editIndex=-1}
 $('eCancel').onclick=closeEdit;
 $('modal').addEventListener('click',e=>{if(e.target.id==='modal')closeEdit()});
-$('eSave').onclick=()=>{if(editIndex<0)return;const m=materials[editIndex];m.name=$('eName').value.trim()||m.name;m.quantity=$('eQty').value.trim()||'1';m.unit=$('eUnit').value.trim()||'шт';store();render();closeEdit()};
+$('eSave').onclick=()=>{
+  if(editIndex<0)return;
+  const name=$('eName').value.trim()||materials[editIndex].name;
+  const unit=$('eUnit').value.trim()||'шт';
+  const quantity=$('eQty').value.trim()||'1';
+  materials.splice(editIndex,1);
+  addOrMerge(name,quantity,unit);
+  store();render();closeEdit();
+};
 $('clear').onclick=()=>{if(materials.length&&confirm('Очистить весь список?')){materials=[];store();render()}};
 
 function wrap(g,text,maxW){const out=[];let cur='';for(const w of text.split(' ')){const t=cur?cur+' '+w:w;if(g.measureText(t).width>maxW&&cur){out.push(cur);cur=w}else cur=t}if(cur)out.push(cur);return out}
