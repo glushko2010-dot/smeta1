@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#183a35">
+<title>СантехСписок</title>
+<style>
+:root{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#17211f;background:#f3f6f4}
+*{box-sizing:border-box}body{margin:0}header{background:#183a35;color:white;padding:22px 18px 18px}
+h1{font-size:24px;margin:0 0 5px}header p{margin:0;color:#d4e4df;font-size:14px}
+main{max-width:720px;margin:auto;padding:16px}
+.card{background:white;border-radius:16px;padding:16px;margin:0 0 14px;box-shadow:0 2px 12px #152d2810}
+label{display:block;font-weight:650;font-size:14px;margin:0 0 6px}
+input,select,button{font:inherit}input{width:100%;border:1px solid #cbd5d1;border-radius:10px;padding:12px;background:white;margin-bottom:12px}
+.row{display:flex;gap:8px}.row>*{flex:1;min-width:0}
+button{border:0;border-radius:11px;padding:12px 14px;font-weight:700;cursor:pointer}
+.primary{background:#183a35;color:white}.secondary{background:#e5eeea;color:#183a35}.danger{background:#fae8e6;color:#8b2921}
+button:disabled{opacity:.5}
+.hint{font-size:13px;color:#5b6964;line-height:1.4}.status{font-size:14px;margin-top:10px;min-height:20px;color:#315c50}
+ul{list-style:none;padding:0;margin:0}.item{display:flex;justify-content:space-between;gap:12px;padding:13px 0;border-bottom:1px solid #edf0ee}.item:last-child{border-bottom:0}.item strong{display:block;overflow-wrap:anywhere}.sub{font-size:13px;color:#66736e;margin-top:3px}.qty{white-space:nowrap;font-weight:750}.item button{padding:7px 10px;margin-top:7px;font-size:13px}
+.empty{color:#6c7974;text-align:center;padding:20px 0}.total{font-size:18px;font-weight:800;display:flex;justify-content:space-between;margin-top:12px}
+footer{text-align:center;color:#78847f;font-size:12px;padding:8px 16px 26px}
+</style>
+</head>
+<body>
+<header><h1>СантехСписок</h1><p>Материалы по объектам · голосовой ввод · печать в PDF</p></header>
+<main>
+<section class="card">
+<label for="project">Название объекта</label>
+<div class="row"><input id="project" placeholder="Например, Квартира на Ленина" style="margin-bottom:0"><button class="secondary" id="newProject">Новый объект</button></div>
+<p class="hint">Список сохраняется автоматически в этом браузере на телефоне.</p>
+</section>
+<section class="card">
+<label for="speech">Добавить материал голосом или текстом</label>
+<input id="speech" placeholder="Например: труба 20 мм 10 метров">
+<div class="row"><button class="primary" id="mic">🎙️ Говорить</button><button class="secondary" id="add">Добавить</button></div>
+<p class="hint">Пример: «труба полипропиленовая 20 мм 10 метров». Повторите название с новым количеством — количество прибавится к существующей позиции.</p>
+<div class="status" id="status" role="status"></div>
+</section>
+<section class="card">
+<div class="row" style="align-items:center"><div><strong>Материалы</strong><div class="hint" id="count">Пока пусто</div></div><button class="secondary" id="pdf">Сохранить в PDF</button></div>
+<ul id="list"></ul><div class="empty" id="empty">Пока нет материалов. Добавьте первую позицию выше.</div>
+<div class="total"><span>Всего позиций</span><span id="total">0</span></div>
+</section>
+<section class="card">
+<strong>Как это работает</strong>
+<p class="hint">1. Назовите материал и количество. 2. Повторные материалы объединяются по похожему названию. 3. Кнопка «Сохранить в PDF» открывает печать — выберите «Сохранить как PDF».</p>
+<p class="hint">Голосовой ввод зависит от поддержки браузера и подключения к интернету. Если микрофон не работает, введите материал текстом.</p>
+</section>
+</main>
+<footer>Прототип для телефона. Данные хранятся локально в браузере этого устройства.</footer>
+<script>
+const $=id=>document.getElementById(id);
+let projects=JSON.parse(localStorage.getItem('santeh_projects_v1')||'{}');
+let current=$('project').value.trim()||'Мой объект';
+function key(s){return s.toLowerCase().replace(/ё/g,'е').replace(/[^\p{L}\p{N}]+/gu,' ').trim().replace(/\b(двадцатка|двадцатую)\b/g,'20 мм').replace(/\s+/g,' ')}
+function save(){projects[current]=items;localStorage.setItem('santeh_projects_v1',JSON.stringify(projects))}
+let items=projects[current]||[];
+function parseInput(raw){
+ let s=raw.trim(); let qty=1, unit='';
+ const patterns=[
+  /(\d+(?:[.,]\d+)?)\s*(метров|метра|метр|м\b|штук|штуки|шт\b|килограмм|кг\b|упаковок|упаковки|упак\b|литров|л\b)\s*$/i,
+  /(?:количество\s*)?(\d+(?:[.,]\d+)?)\s*(?:x|×)\s*$/i
+ ];
+ for(const re of patterns){const m=s.match(re);if(m){qty=parseFloat(m[1].replace(',','.'));unit=(m[2]||'').toLowerCase();s=s.slice(0,m.index).trim();break}}
+ if(!unit){const m=s.match(/\s+(\d+(?:[.,]\d+)?)\s*$/);if(m){qty=parseFloat(m[1].replace(',','.'));s=s.slice(0,m.index).trim()}}
+ if(!s) s=raw.trim();
+ if(!Number.isFinite(qty)||qty<=0)qty=1;
+ return {name:s,qty,unit}
+}
+function addItem(raw){
+ if(!raw.trim()){$('status').textContent='Сначала скажите или введите название материала.';return}
+ const p=parseInput(raw), k=key(p.name);
+ const found=items.find(x=>key(x.name)===k || (k.length>5&&key(x.name).includes(k)) || (key(x.name).length>5&&k.includes(key(x.name))));
+ if(found){found.qty+=p.qty;if(!found.unit&&p.unit)found.unit=p.unit;$('status').textContent='Добавлено к существующей позиции: '+found.name}
+ else {items.push({name:p.name,qty:p.qty,unit:p.unit});$('status').textContent='Добавлен новый материал.'}
+ $('speech').value='';save();render()
+}
+function render(){
+ $('project').value=current;$('list').innerHTML='';
+ $('empty').style.display=items.length?'none':'block';
+ $('count').textContent=items.length?items.length+' поз. в списке':'Пока пусто';
+ $('total').textContent=items.length;
+ items.forEach((x,i)=>{const li=document.createElement('li');li.className='item';
+ const left=document.createElement('div');const strong=document.createElement('strong');strong.textContent=x.name;
+ const sub=document.createElement('div');sub.className='sub';sub.textContent='Позиция '+(i+1);
+ left.append(strong,sub);
+ const right=document.createElement('div');right.style.textAlign='right';
+ const qty=document.createElement('div');qty.className='qty';qty.textContent=Number(x.qty.toFixed(3))+' '+(x.unit||'шт.');
+ const edit=document.createElement('button');edit.className='secondary';edit.textContent='Изменить';edit.onclick=()=>{const n=prompt('Название материала',x.name);if(n===null)return;const q=prompt('Количество',x.qty);if(q===null)return;const v=parseFloat(q.replace(',','.'));if(n.trim()&&v>0){x.name=n.trim();x.qty=v;save();render()}};
+ const del=document.createElement('button');del.className='danger';del.textContent='Удалить';del.style.marginLeft='5px';del.onclick=()=>{items.splice(i,1);save();render()};
+ right.append(qty,edit,del);li.append(left,right);$('list').append(li)})
+}
+$('add').onclick=()=>addItem($('speech').value);
+$('speech').addEventListener('keydown',e=>{if(e.key==='Enter')addItem($('speech').value)});
+let activeRec=null;
+$('mic').onclick=()=>{
+ if(activeRec){activeRec.stop();return}
+ const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+ if(!SR){$('status').textContent='Голосовой ввод здесь не поддерживается. Откройте страницу в Chrome или введите материал текстом.';return}
+ const rec=new SR();rec.lang='ru-RU';rec.interimResults=false;rec.maxAlternatives=1;rec.continuous=false;
+ activeRec=rec;
+ $('mic').textContent='⏹ Стоп';
+ $('status').textContent='Слушаю… назовите материал и количество.';
+ let got=false;
+ rec.onresult=e=>{got=true;const t=((e.results[0]&&e.results[0][0]&&e.results[0][0].transcript)||'').trim();
+   if(t){$('speech').value=t;addItem(t)}else $('status').textContent='Не расслышал. Попробуйте ещё раз.'};
+ rec.onerror=e=>{const m={'not-allowed':'Браузер не дал доступ к микрофону. Проверьте: 1) в настройках Android → Приложения → Chrome → Разрешения → Микрофон должно быть «Разрешено»; 2) страница открыта в Chrome, а не во встроенном браузере (например, Telegram); 3) адрес начинается с https://.',
+   'service-not-allowed':'Голосовой сервис браузера недоступен.','no-speech':'Речь не услышана. Попробуйте ещё раз.',
+   'network':'Нет связи с сервисом распознавания речи.','audio-capture':'Микрофон не найден.'};
+   $('status').textContent=m[e.error]||('Не удалось распознать речь ('+e.error+'). Попробуйте ещё раз или введите текстом.')};
+ rec.onend=()=>{activeRec=null;$('mic').textContent='🎙️ Говорить';
+   if(!got&&$('status').textContent.startsWith('Слушаю'))$('status').textContent='Ничего не услышано. Нажмите «Говорить» и говорите после сигнала.'};
+ try{rec.start()}catch(err){activeRec=null;$('mic').textContent='🎙️ Говорить';$('status').textContent='Не удалось включить микрофон. Обновите страницу.'}
+};
+$('newProject').onclick=()=>{
+ save();const name=prompt('Название нового объекта');if(!name||!name.trim())return;
+ current=name.trim();items=projects[current]||[];render();$('status').textContent='Открыт объект: '+current
+};
+$('project').addEventListener('change',()=>{save();current=$('project').value.trim()||'Мой объект';items=projects[current]||[];render()});
+$('pdf').onclick=()=>{
+ const win=window.AndroidPrint?{document:{write:h=>AndroidPrint.printHtml(h),close:()=>{}}}:window.open('','_blank');if(!win){$('status').textContent='Разрешите всплывающие окна для печати PDF.';return}
+ const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+ win.document.write('<!doctype html><html lang="ru"><meta charset="utf-8"><title>СантехСписок — '+esc(current)+'</title><style>body{font:16px Arial;padding:24px}h1{font-size:22px}table{border-collapse:collapse;width:100%;margin-top:20px}td,th{border:1px solid #999;padding:9px;text-align:left}th{background:#eee}.note{margin-top:28px;color:#555;font-size:12px}@media print{button{display:none}}</style><h1>Список материалов</h1><p><b>Объект:</b> '+esc(current)+'</p><table><thead><tr><th>№</th><th>Материал</th><th>Количество</th><th>Ед.</th></tr></thead><tbody>'+items.map((x,i)=>'<tr><td>'+(i+1)+'</td><td>'+esc(x.name)+'</td><td>'+esc(x.qty)+'</td><td>'+esc(x.unit||'шт.')+'</td></tr>').join('')+'</tbody></table><p class="note">Создано в приложении «СантехСписок»</p><script>window.onload=()=>window.print()<\/script></html>');
+ win.document.close()
+};
+render();
+</script>
+</body></html>
